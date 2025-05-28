@@ -5,10 +5,9 @@ require('dotenv').config();
 
 const app = express();
 
-// Allow only your frontend URL in production
 const allowedOrigins = [
-  'https://mcq-generator-8825e.web.app', // replace with your Firebase URL
-  'http://localhost:4200' // for local dev testing
+  'https://mcq-generator-8825e.web.app',
+  'http://localhost:4200'
 ];
 
 app.use(cors({
@@ -32,10 +31,15 @@ app.post('/generate-mcq', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields.' });
   }
 
-  const prompt = `
-Generate ${numQuestions} multiple choice questions from the passage below with varying difficulties (${difficulty.join(', ')}).
-Format each question as:
-**<Difficulty>**
+  const questionsPerDifficulty = Math.ceil(numQuestions / difficulty.length);
+  let finalMCQs = '';
+
+  for (const level of difficulty) {
+    const prompt = `
+Generate ${questionsPerDifficulty} multiple choice questions from the following passage with **${level}** difficulty.
+Each question should be formatted like:
+
+**${level.charAt(0).toUpperCase() + level.slice(1)}**
 1. Question
 A) Option A
 B) Option B
@@ -47,27 +51,31 @@ Passage:
 ${passage}
 `;
 
-  try {
-    const groqResponse = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        messages: [{ role: 'user', content: prompt }],
-        model: 'llama-3.1-8b-instant',
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
+    try {
+      const groqResponse = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          messages: [{ role: 'user', content: prompt }],
+          model: 'llama-3.1-8b-instant',
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-    const answer = groqResponse.data.choices?.[0]?.message?.content || 'No response generated';
-    res.json({ mcqs: answer });
-  } catch (err) {
-    console.error('GROQ API Error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to generate MCQs.' });
+      const answer = groqResponse.data.choices?.[0]?.message?.content || '';
+      finalMCQs += `\n${answer.trim()}\n`;
+
+    } catch (err) {
+      console.error('GROQ API Error:', err.response?.data || err.message);
+      return res.status(500).json({ error: 'Failed to generate MCQs for ' + level });
+    }
   }
+
+  res.json({ mcqs: finalMCQs.trim() });
 });
 
 const PORT = process.env.PORT || 3000;
