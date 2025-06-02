@@ -24,6 +24,13 @@ app.use(cors({
 
 app.use(express.json());
 
+// Parameter mapping per difficulty level
+const paramMap = {
+  easy: { temperature: 0.3, top_p: 0.9, max_tokens: 512 },
+  medium: { temperature: 0.5, top_p: 0.95, max_tokens: 768 },
+  hard: { temperature: 0.8, top_p: 1.0, max_tokens: 1024 },
+};
+
 app.post('/generate-mcq', async (req, res) => {
   const { passage, numQuestions, difficulty } = req.body;
 
@@ -35,6 +42,8 @@ app.post('/generate-mcq', async (req, res) => {
   let finalMCQs = '';
 
   for (const level of difficulty) {
+    const params = paramMap[level.toLowerCase()] || paramMap.medium;
+
     const prompt = `
 Generate ${questionsPerDifficulty} multiple choice questions from the following passage with **${level}** difficulty.
 Each question should be formatted like:
@@ -57,6 +66,9 @@ ${passage}
         {
           messages: [{ role: 'user', content: prompt }],
           model: 'llama-3.1-8b-instant',
+          temperature: params.temperature,
+          top_p: params.top_p,
+          max_tokens: params.max_tokens,
         },
         {
           headers: {
